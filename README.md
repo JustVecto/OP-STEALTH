@@ -7,5 +7,5 @@ The art of hiding information inside images that appear ordinary. Unlike encrypt
 
 Support JustVecto 🤍:
 
-Ethereum: 0xadFF24C5B79e0a2B33453ef7A6EB401F819D469e
+Ethereum: 0xadFF24C5B79e0a2B33453ef7A6EB401F819D469e or
 BTC: bc1qqcpss2uts6judyplfznwepp5newwglvtfzn9he
