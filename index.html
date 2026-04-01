@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OP STEALTH // Image Steganography</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=IBM+Plex+Mono:wght@300;400;600&display=swap');
+
+:root {
+  --bg:       #0c0a07;
+  --bg2:      #111009;
+  --panel:    #161410;
+  --border:   #2a2418;
+  --amber:    #e8a020;
+  --amber2:   #c4791a;
+  --amber-dim:#5a3d0a;
+  --red:      #c0392b;
+  --green:    #27ae60;
+  --text:     #c8b078;
+  --text-dim: #5a4a28;
+  --white:    #e8dcc8;
+  --glow: 0 0 24px rgba(232,160,32,0.2);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Film grain */
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events:none; z-index:9998; opacity:0.6;
+}
+
+/* Vignette */
+body::after {
+  content:'';
+  position:fixed; inset:0;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.7) 100%);
+  pointer-events:none; z-index:9997;
+}
+
+/* ── HEADER ── */
+.header {
+  position:relative; z-index:10;
+  border-bottom: 1px solid var(--border);
+  padding: 0 40px;
+  display: flex;
+  align-items: stretch;
+  background: linear-gradient(180deg, rgba(232,160,32,0.05) 0%, transparent 100%);
+}
+
+.header-left {
+  padding: 24px 0;
+  border-right: 1px solid var(--border);
+  padding-right: 32px;
+  margin-right: 32px;
+  display:flex;
+  align-items:center;
+  gap:16px;
+}
+
+.stamp {
+  width: 52px; height: 52px;
+  border: 3px solid var(--amber);
+  border-radius: 50%;
+  display:flex; align-items:center; justify-content:center;
+  position:relative;
+  box-shadow: 0 0 0 1px var(--amber2), inset 0 0 0 1px var(--amber2), var(--glow);
+}
+
+.stamp::before {
+  content:'TOP SECRET';
+  position:absolute;
+  font-family:'Bebas Neue', sans-serif;
+  font-size:5px; letter-spacing:1px;
+  color:var(--amber); top:-10px;
+  white-space:nowrap;
+}
+
+.stamp svg { width:26px; height:26px; }
+
+.header-title h1 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 36px;
+  letter-spacing: 8px;
+  color: var(--amber);
+  text-shadow: 0 0 30px rgba(232,160,32,0.4);
+  line-height:1;
+}
+
+.header-title p {
+  font-size: 9px;
+  letter-spacing: 4px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  font-family: 'Courier Prime', monospace;
+}
+
+.header-meta {
+  margin-left:auto;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:flex-end;
+  gap:4px;
+  font-family:'Courier Prime', monospace;
+  font-size:9px;
+  letter-spacing:2px;
+  color:var(--text-dim);
+  padding: 20px 0;
+}
+
+.classified-tag {
+  font-family:'Bebas Neue', sans-serif;
+  font-size:14px;
+  letter-spacing:4px;
+  color:var(--red);
+  border: 1px solid var(--red);
+  padding: 3px 12px;
+  box-shadow: 0 0 12px rgba(192,57,43,0.3);
+  animation: flicker 4s ease-in-out infinite;
+}
+
+@keyframes flicker {
+  0%,96%,100%{opacity:1} 97%{opacity:0.4} 98%{opacity:1} 99%{opacity:0.6}
+}
+
+/* ── TABS ── */
+.tabs {
+  position:relative; z-index:10;
+  display:flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+}
+
+.tab {
+  font-family:'Bebas Neue', sans-serif;
+  font-size:15px;
+  letter-spacing:4px;
+  padding: 16px 36px;
+  border:none;
+  background:none;
+  color: var(--text-dim);
+  cursor:pointer;
+  border-right: 1px solid var(--border);
+  position:relative;
+  transition: color 0.2s;
+}
+
+.tab::after {
+  content:'';
+  position:absolute;
+  bottom:0; left:0; right:0; height:2px;
+  background:var(--amber);
+  transform:scaleX(0); transition:transform 0.2s;
+}
+
+.tab:hover { color:var(--text); }
+.tab.active { color:var(--amber); }
+.tab.active::after { transform:scaleX(1); }
+
+/* ── MAIN ── */
+.main {
+  position:relative; z-index:10;
+  max-width:960px;
+  margin:0 auto;
+  padding:40px 24px;
+}
+
+.panel { display:none; animation: slideIn 0.3s ease; }
+.panel.active { display:block; }
+
+@keyframes slideIn {
+  from { opacity:0; transform:translateY(6px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+/* ── CARDS ── */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 28px;
+  margin-bottom:20px;
+  position:relative;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+}
+
+.card::before {
+  content:attr(data-label);
+  position:absolute;
+  top:-1px; left:20px;
+  font-family:'Bebas Neue', sans-serif;
+  font-size:10px; letter-spacing:3px;
+  color:var(--amber2);
+  background:var(--panel);
+  padding:0 8px;
+}
+
+.card-row {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:20px;
+}
+
+@media(max-width:640px){ .card-row{grid-template-columns:1fr;} }
+
+/* ── LABELS & INPUTS ── */
+.lbl {
+  font-size:9px; letter-spacing:3px;
+  color:var(--text-dim);
+  text-transform:uppercase;
+  display:block;
+  margin-bottom:8px;
+  font-family:'Courier Prime', monospace;
+}
+
+input[type=text], input[type=password], textarea {
+  width:100%;
+  background:var(--bg);
+  border:1px solid var(--border);
+  color:var(--white);
+  font-family:'IBM Plex Mono', monospace;
+  font-size:13px;
+  padding:12px 14px;
+  outline:none;
+  transition:border-color 0.2s;
+  resize:vertical;
+}
+
+input:focus, textarea:focus {
+  border-color:var(--amber2);
+  box-shadow:0 0 0 2px rgba(232,160,32,0.1);
+}
+
+textarea { min-height:110px; line-height:1.6; }
+
+/* ── IMAGE DROP ZONE ── */
+.drop-zone {
+  border:1px dashed var(--amber-dim);
+  padding:40px 20px;
+  text-align:center;
+  cursor:pointer;
+  transition:all 0.2s;
+  position:relative;
+  background:var(--bg);
+  min-height:160px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+}
+
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color:var(--amber);
+  background:rgba(232,160,32,0.04);
+}
+
+.drop-zone input[type=file] {
+  position:absolute; inset:0;
+  opacity:0; cursor:pointer;
+  width:100%; height:100%;
+}
+
+.drop-icon { font-size:32px; opacity:0.5; }
+.drop-text { font-size:11px; letter-spacing:2px; color:var(--text-dim); font-family:'Courier Prime'; }
+.drop-sub  { font-size:9px;  letter-spacing:1px; color:var(--text-dim); opacity:0.6; }
+
+/* ── IMAGE PREVIEW ── */
+.img-preview-wrap {
+  position:relative;
+  display:inline-block;
+  margin-top:14px;
+  max-width:100%;
+}
+
+.img-preview {
+  max-width:100%;
+  max-height:280px;
+  display:block;
+  border:1px solid var(--border);
+  image-rendering:auto;
+}
+
+.img-overlay {
+  position:absolute; inset:0;
+  background:linear-gradient(135deg, transparent 60%, rgba(232,160,32,0.08) 100%);
+  pointer-events:none;
+}
+
+.img-badge {
+  position:absolute; top:8px; right:8px;
+  font-family:'Bebas Neue'; font-size:10px; letter-spacing:2px;
+  background:rgba(12,10,7,0.85);
+  border:1px solid var(--amber-dim);
+  color:var(--amber);
+  padding:2px 8px;
+}
+
+/* ── BUTTONS ── */
+.btn-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+
+.btn {
+  font-family:'Bebas Neue', sans-serif;
+  font-size:13px; letter-spacing:3px;
+  padding:11px 24px;
+  border:1px solid;
+  cursor:pointer;
+  transition:all 0.15s;
+  position:relative; overflow:hidden;
+  clip-path:polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+
+.btn::before {
+  content:'';
+  position:absolute; inset:0;
+  background:currentColor;
+  opacity:0; transition:opacity 0.15s;
+}
+.btn:hover::before  { opacity:0.08; }
+.btn:active::before { opacity:0.18; }
+
+.btn-amber {
+  background:rgba(232,160,32,0.1);
+  border-color:var(--amber);
+  color:var(--amber);
+}
+
+.btn-red {
+  background:rgba(192,57,43,0.08);
+  border-color:var(--red);
+  color:var(--red);
+}
+
+.btn-green {
+  background:rgba(39,174,96,0.08);
+  border-color:var(--green);
+  color:var(--green);
+}
+
+.btn-ghost {
+  background:transparent;
+  border-color:var(--border);
+  color:var(--text-dim);
+}
+
+/* ── OUTPUT ── */
+.output {
+  background:var(--bg);
+  border:1px solid var(--border);
+  padding:16px;
+  font-family:'IBM Plex Mono';
+  font-size:12px;
+  line-height:1.8;
+  margin-top:16px;
+  display:none;
+  position:relative;
+  word-break:break-all;
+}
+
+.output.ok  { border-color:rgba(39,174,96,0.4);  color:#5deb8a; }
+.output.err { border-color:rgba(192,57,43,0.4);  color:#e87a71; }
+.output.msg { border-color:rgba(232,160,32,0.3); color:var(--white); }
+
+.copy-btn {
+  position:absolute; top:8px; right:8px;
+  font-family:'Bebas Neue'; font-size:9px; letter-spacing:2px;
+  padding:4px 10px;
+  background:rgba(232,160,32,0.1);
+  border:1px solid rgba(232,160,32,0.3);
+  color:var(--amber);
+  cursor:pointer;
+  transition:all 0.15s;
+}
+.copy-btn:hover { background:rgba(232,160,32,0.2); }
+
+/* ── PROGRESS ── */
+.progress-wrap { margin-top:14px; display:none; }
+
+.progress-bar {
+  height:3px;
+  background:var(--border);
+  overflow:hidden;
+}
+
+.progress-fill {
+  height:100%;
+  background:linear-gradient(90deg, var(--amber2), var(--amber));
+  width:0%;
+  transition:width 0.1s linear;
+  box-shadow:0 0 8px rgba(232,160,32,0.5);
+}
+
+.progress-label {
+  font-size:9px; letter-spacing:2px;
+  color:var(--text-dim); margin-top:5px;
+  font-family:'Courier Prime';
+}
+
+/* ── STATS ── */
+.stats-grid {
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:12px;
+  margin-top:14px;
+}
+
+.stat-box {
+  background:var(--bg);
+  border:1px solid var(--border);
+  padding:12px 14px;
+  text-align:center;
+}
+
+.stat-val {
+  font-family:'Bebas Neue';
+  font-size:22px;
+  color:var(--amber);
+  display:block;
+}
+
+.stat-key {
+  font-size:8px;
+  letter-spacing:2px;
+  color:var(--text-dim);
+  font-family:'Courier Prime';
+  margin-top:2px;
+}
+
+/* ── DIVIDER ── */
+.divider {
+  border:none;
+  border-top:1px solid var(--border);
+  margin:20px 0;
+  position:relative;
+}
+
+.divider::after {
+  content:attr(data-text);
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  background:var(--panel);
+  padding:0 12px;
+  font-size:9px;
+  letter-spacing:3px;
+  color:var(--text-dim);
+  font-family:'Courier Prime';
+}
+
+/* ── HOW IT WORKS ── */
+.how-it-works {
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(200px,1fr));
+  gap:14px;
+  margin-top:16px;
+}
+
+.how-step {
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-top:2px solid var(--amber-dim);
+  padding:16px;
+}
+
+.how-num {
+  font-family:'Bebas Neue';
+  font-size:32px;
+  color:var(--amber-dim);
+  line-height:1;
+}
+
+.how-title {
+  font-family:'Bebas Neue';
+  font-size:13px; letter-spacing:2px;
+  color:var(--amber);
+  margin:4px 0;
+}
+
+.how-desc {
+  font-size:10px; line-height:1.7;
+  color:var(--text-dim);
+  font-family:'Courier Prime';
+}
+
+/* ── TOAST ── */
+.toast {
+  position:fixed; bottom:24px; right:24px;
+  background:var(--panel);
+  border:1px solid var(--amber);
+  color:var(--amber);
+  font-family:'Bebas Neue'; font-size:12px; letter-spacing:3px;
+  padding:12px 20px;
+  z-index:9999;
+  opacity:0; transform:translateY(8px);
+  transition:all 0.2s;
+  pointer-events:none;
+  box-shadow:var(--glow);
+  clip-path:polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+.toast.show { opacity:1; transform:translateY(0); }
+
+/* Canvas hidden */
+canvas { display:none; }
+
+@media(max-width:600px){
+  .header { flex-wrap:wrap; padding:16px; gap:12px; }
+  .header-left { border:none; padding-right:0; margin-right:0; }
+  .main { padding:20px 12px; }
+  .tab { padding:12px 18px; font-size:12px; }
+  .stats-grid { grid-template-columns:1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Hidden canvas for pixel manipulation -->
+<canvas id="c"></canvas>
+
+<header class="header">
+  <div class="header-left">
+    <div class="stamp">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#e8a020" stroke-width="1.5">
+        <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+        <line x1="3" y1="3" x2="21" y2="21" stroke="#c0392b"/>
+      </svg>
+    </div>
+    <div class="header-title">
+      <h1>OP STEALTH</h1>
+      <p>// IMAGE STEGANOGRAPHY ENGINE — LSB + AES-256</p>
+    </div>
+  </div>
+  <div class="header-meta">
+    <div class="classified-tag">CLASSIFIED</div>
+    <div>CLEARANCE: ALPHA-7</div>
+    <div>PROTOCOL: LSB-3BIT</div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" onclick="showPanel('hide',this)">⬛ CONCEAL MESSAGE</button>
+  <button class="tab" onclick="showPanel('reveal',this)">🔍 EXTRACT MESSAGE</button>
+  <button class="tab" onclick="showPanel('about',this)">📋 HOW IT WORKS</button>
+</nav>
+
+<main class="main">
+
+  <!-- ════ HIDE PANEL ════ -->
+  <div class="panel active" id="panel-hide">
+
+    <div class="card" data-label="STEP 1 — SELECT CARRIER IMAGE">
+      <span class="lbl">Upload any PNG or JPG image. Your secret will be hidden inside its pixels.</span>
+      <div class="drop-zone" id="hide-drop">
+        <input type="file" id="hide-img-input" accept="image/*" onchange="loadHideImage()">
+        <div class="drop-icon">🖼</div>
+        <div class="drop-text">DROP IMAGE HERE OR CLICK TO BROWSE</div>
+        <div class="drop-sub">PNG · JPG · WEBP — larger images = more capacity</div>
+      </div>
+      <div id="hide-preview-wrap" style="display:none; margin-top:16px; text-align:center;">
+        <div class="img-preview-wrap">
+          <img id="hide-preview" class="img-preview">
+          <div class="img-overlay"></div>
+          <div class="img-badge" id="hide-badge">LOADED</div>
+        </div>
+        <div class="stats-grid" id="hide-stats" style="text-align:left; margin-top:12px;">
+          <div class="stat-box"><span class="stat-val" id="stat-dim">—</span><div class="stat-key">DIMENSIONS</div></div>
+          <div class="stat-box"><span class="stat-val" id="stat-pixels">—</span><div class="stat-key">TOTAL PIXELS</div></div>
+          <div class="stat-box"><span class="stat-val" id="stat-cap">—</span><div class="stat-key">MAX CAPACITY</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-label="STEP 2 — SECRET MESSAGE">
+      <span class="lbl">Secret Message</span>
+      <textarea id="hide-msg" placeholder="Type your secret message here...
+It will be invisibly embedded into the image pixels." oninput="updateCapacity()"></textarea>
+      <div style="font-size:9px; letter-spacing:2px; color:var(--text-dim); margin-top:6px; font-family:'Courier Prime';">
+        <span id="msg-chars">0</span> CHARS · <span id="msg-used">0%</span> OF CAPACITY USED
+      </div>
+
+      <hr class="divider" data-text="OPTIONAL ENCRYPTION" style="margin:20px 0;">
+
+      <span class="lbl">Encryption Passphrase (optional — but recommended)</span>
+      <input type="password" id="hide-pass" placeholder="Leave blank to embed without encryption...">
+      <div style="font-size:9px; letter-spacing:1px; color:var(--text-dim); margin-top:6px; font-family:'Courier Prime';">
+        When set, message is AES-256-GCM encrypted before hiding. Double-layer protection.
+      </div>
+    </div>
+
+    <div class="card" data-label="STEP 3 — EMBED & DOWNLOAD">
+      <div class="btn-row">
+        <button class="btn btn-amber" onclick="hideMessage()">▶ EMBED &amp; DOWNLOAD</button>
+        <button class="btn btn-ghost" onclick="resetHide()">✕ RESET</button>
+      </div>
+      <div class="progress-wrap" id="hide-progress">
+        <div class="progress-bar"><div class="progress-fill" id="hide-pfill"></div></div>
+        <div class="progress-label" id="hide-plabel">INITIALIZING...</div>
+      </div>
+      <div class="output" id="hide-output">
+        <span id="hide-output-text"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ REVEAL PANEL ════ -->
+  <div class="panel" id="panel-reveal">
+
+    <div class="card" data-label="STEP 1 — LOAD STEGANOGRAPHIC IMAGE">
+      <span class="lbl">Upload the image that contains a hidden message.</span>
+      <div class="drop-zone" id="reveal-drop">
+        <input type="file" id="reveal-img-input" accept="image/*" onchange="loadRevealImage()">
+        <div class="drop-icon">🔍</div>
+        <div class="drop-text">DROP STEGANOGRAPHIC IMAGE HERE</div>
+        <div class="drop-sub">Must be the exact file output by OP STEALTH — use PNG for lossless</div>
+      </div>
+      <div id="reveal-preview-wrap" style="display:none; margin-top:16px; text-align:center;">
+        <div class="img-preview-wrap">
+          <img id="reveal-preview" class="img-preview">
+          <div class="img-overlay"></div>
+          <div class="img-badge">SCANNING...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-label="STEP 2 — DECRYPTION KEY (IF USED)">
+      <span class="lbl">Passphrase</span>
+      <input type="password" id="reveal-pass" placeholder="Enter passphrase if message was encrypted, or leave blank...">
+    </div>
+
+    <div class="card" data-label="STEP 3 — EXTRACT">
+      <div class="btn-row">
+        <button class="btn btn-amber" onclick="revealMessage()">🔍 EXTRACT MESSAGE</button>
+        <button class="btn btn-ghost" onclick="resetReveal()">✕ RESET</button>
+      </div>
+      <div class="progress-wrap" id="reveal-progress">
+        <div class="progress-bar"><div class="progress-fill" id="reveal-pfill"></div></div>
+        <div class="progress-label" id="reveal-plabel">SCANNING PIXELS...</div>
+      </div>
+      <div class="output msg" id="reveal-output" style="display:none;">
+        <button class="copy-btn" onclick="copyEl('reveal-msg-text')">COPY</button>
+        <div style="font-size:9px; letter-spacing:2px; color:var(--text-dim); margin-bottom:10px; font-family:'Courier Prime';">// EXTRACTED MESSAGE</div>
+        <div id="reveal-msg-text" style="white-space:pre-wrap; color:var(--white); font-size:13px; line-height:1.7;"></div>
+      </div>
+      <div class="output err" id="reveal-error" style="display:none;">
+        <span id="reveal-error-text"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ ABOUT PANEL ════ -->
+  <div class="panel" id="panel-about">
+    <div class="card" data-label="WHAT IS STEGANOGRAPHY">
+      <p style="font-size:12px; line-height:2; color:var(--text); font-family:'Courier Prime';">
+        Steganography is the art of hiding information inside ordinary-looking files. Unlike encryption which makes data unreadable, steganography makes data <em style="color:var(--amber)">invisible</em>. A spy can send a photo of a landscape that carries a secret mission briefing — and anyone intercepting it sees only a landscape.
+      </p>
+      <p style="font-size:12px; line-height:2; color:var(--text); font-family:'Courier Prime'; margin-top:12px;">
+        OP STEALTH combines both: your message is first <strong style="color:var(--amber)">AES-256-GCM encrypted</strong>, then hidden using <strong style="color:var(--amber)">LSB steganography</strong>. Even if someone knows to look, they still need your passphrase.
+      </p>
+    </div>
+
+    <div class="card" data-label="HOW LSB STEGANOGRAPHY WORKS">
+      <div class="how-it-works">
+        <div class="how-step">
+          <div class="how-num">01</div>
+          <div class="how-title">PIXEL ANATOMY</div>
+          <div class="how-desc">Every pixel has Red, Green, Blue channels — each a number 0–255. Changing the last bit (LSB) shifts a value by at most 1 — completely imperceptible to the human eye.</div>
+        </div>
+        <div class="how-step">
+          <div class="how-num">02</div>
+          <div class="how-title">BIT ENCODING</div>
+          <div class="how-desc">Your message is converted to binary. Each bit is written into the LSB of a pixel channel. 3 bits per pixel (R, G, B). A 1MP image can hide ~375 KB of data.</div>
+        </div>
+        <div class="how-step">
+          <div class="how-num">03</div>
+          <div class="how-title">MAGIC HEADER</div>
+          <div class="how-desc">The first 32 bits store the message length, prefixed by a magic signature "OPST" so OP STEALTH can verify and find where the message ends.</div>
+        </div>
+        <div class="how-step">
+          <div class="how-num">04</div>
+          <div class="how-title">DOUBLE LAYER</div>
+          <div class="how-desc">With a passphrase, your message is AES-256-GCM encrypted first. The hidden data is ciphertext — even pixel-level forensics yield nothing without the key.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-label="IMPORTANT NOTES">
+      <ul style="font-family:'Courier Prime'; font-size:11px; line-height:2.2; color:var(--text-dim); list-style:none;">
+        <li>▸ <span style="color:var(--amber)">Always download as PNG.</span> JPG compression destroys the hidden bits. OP STEALTH forces PNG output.</li>
+        <li>▸ <span style="color:var(--amber)">Never re-compress or resize</span> the output image. Filters and social media uploads will corrupt the payload.</li>
+        <li>▸ All operations happen <span style="color:var(--amber)">100% in your browser</span>. No data is sent anywhere.</li>
+        <li>▸ This tool is for <span style="color:var(--amber)">educational and privacy purposes</span> only.</li>
+        <li>▸ The output image is <span style="color:var(--amber)">visually identical</span> to the original — pixel differences are invisible.</li>
+      </ul>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══ HELPERS ═══
+function showPanel(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function copyEl(id) {
+  navigator.clipboard.writeText(document.getElementById(id).textContent).then(() => toast('COPIED TO CLIPBOARD'));
+}
+
+function setProgress(prefix, pct, label) {
+  document.getElementById(prefix + '-progress').style.display = 'block';
+  document.getElementById(prefix + '-pfill').style.width = pct + '%';
+  document.getElementById(prefix + '-plabel').textContent = label;
+}
+
+// ═══ STEGANOGRAPHY ENGINE ═══
+const MAGIC = 'OPST'; // 4 bytes magic header
+
+function strToBits(str) {
+  const bits = [];
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    for (let b = 7; b >= 0; b--) bits.push((code >> b) & 1);
+  }
+  return bits;
+}
+
+function uint8ToBits(arr) {
+  const bits = [];
+  for (let i = 0; i < arr.length; i++)
+    for (let b = 7; b >= 0; b--) bits.push((arr[i] >> b) & 1);
+  return bits;
+}
+
+function bitsToUint8(bits) {
+  const bytes = new Uint8Array(bits.length / 8);
+  for (let i = 0; i < bytes.length; i++) {
+    let val = 0;
+    for (let b = 0; b < 8; b++) val = (val << 1) | bits[i*8+b];
+    bytes[i] = val;
+  }
+  return bytes;
+}
+
+function int32ToBits(n) {
+  const bits = [];
+  for (let b = 31; b >= 0; b--) bits.push((n >> b) & 1);
+  return bits;
+}
+
+function bitsToInt32(bits) {
+  let n = 0;
+  for (let b = 0; b < 32; b++) n = (n << 1) | bits[b];
+  return n >>> 0;
+}
+
+// ═══ AES-256 (same as OP ENCRYPTIONS) ═══
+function ab2hex(buffer) {
+  return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+function hex2ab(hex) {
+  return new Uint8Array(hex.match(/.{1,2}/g).map(b => parseInt(b,16)));
+}
+
+async function deriveKey(pass, salt) {
+  const enc = new TextEncoder();
+  const km = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt, iterations:310000, hash:'SHA-256' },
+    km, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']
+  );
+}
+
+async function aesEncrypt(text, pass) {
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(pass, salt);
+  const ct   = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(text));
+  // Return as hex string: salt:iv:ct
+  return ab2hex(salt) + ':' + ab2hex(iv) + ':' + ab2hex(new Uint8Array(ct));
+}
+
+async function aesDecrypt(hex, pass) {
+  const parts = hex.split(':');
+  if (parts.length !== 3) throw new Error('Invalid encrypted format');
+  const [saltHex, ivHex, ctHex] = parts;
+  const salt = hex2ab(saltHex), iv = hex2ab(ivHex), ct = hex2ab(ctHex);
+  const key  = await deriveKey(pass, salt);
+  const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+  return new TextDecoder().decode(plain);
+}
+
+// ═══ IMAGE LOADING ═══
+let hideImgData = null, revealImgData = null;
+let hideCanvas = null, revealCanvas = null;
+
+function loadImageToCanvas(file, canvasId, previewId, wrapId, badgeId, onLoad) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const cv = document.getElementById(canvasId) || document.getElementById('c');
+      cv.width = img.width; cv.height = img.height;
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imgData = ctx.getImageData(0, 0, img.width, img.height);
+
+      const prev = document.getElementById(previewId);
+      prev.src = e.target.result;
+      document.getElementById(wrapId).style.display = 'block';
+      if (badgeId) document.getElementById(badgeId).textContent = `${img.width}×${img.height}`;
+
+      onLoad(imgData, img.width, img.height);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function loadHideImage() {
+  const file = document.getElementById('hide-img-input').files[0];
+  if (!file) return;
+
+  const canvas = document.getElementById('c');
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = e => {
+    img.onload = () => {
+      canvas.width = img.width; canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      hideImgData = ctx.getImageData(0, 0, img.width, img.height);
+      hideCanvas = canvas;
+
+      document.getElementById('hide-preview').src = e.target.result;
+      document.getElementById('hide-preview-wrap').style.display = 'block';
+      document.getElementById('hide-badge').textContent = `${img.width}×${img.height}`;
+
+      const pixels = img.width * img.height;
+      const cap = Math.floor((pixels * 3 - 32 - 32) / 8); // bits minus header
+      document.getElementById('stat-dim').textContent = `${img.width}×${img.height}`;
+      document.getElementById('stat-pixels').textContent = pixels.toLocaleString();
+      document.getElementById('stat-cap').textContent = cap.toLocaleString() + ' B';
+
+      updateCapacity();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function loadRevealImage() {
+  const file = document.getElementById('reveal-img-input').files[0];
+  if (!file) return;
+  const canvas = document.getElementById('c');
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = e => {
+    img.onload = () => {
+      canvas.width = img.width; canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      revealImgData = ctx.getImageData(0, 0, img.width, img.height);
+      document.getElementById('reveal-preview').src = e.target.result;
+      document.getElementById('reveal-preview-wrap').style.display = 'block';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function updateCapacity() {
+  const msg = document.getElementById('hide-msg').value;
+  const chars = msg.length;
+  document.getElementById('msg-chars').textContent = chars;
+  if (hideImgData) {
+    const cap = Math.floor((hideImgData.width * hideImgData.height * 3 - 64) / 8);
+    const pct = Math.min(100, Math.floor((chars / cap) * 100));
+    document.getElementById('msg-used').textContent = pct + '%';
+  }
+}
+
+// ═══ HIDE MESSAGE ═══
+async function hideMessage() {
+  if (!hideImgData) { toast('LOAD AN IMAGE FIRST'); return; }
+  const msg = document.getElementById('hide-msg').value;
+  if (!msg) { toast('ENTER A MESSAGE'); return; }
+  const pass = document.getElementById('hide-pass').value;
+
+  const outEl = document.getElementById('hide-output');
+  outEl.style.display = 'none';
+  setProgress('hide', 5, 'PREPARING PAYLOAD...');
+
+  await new Promise(r => setTimeout(r, 30));
+
+  try {
+    // Encrypt if password given
+    let payload = msg;
+    if (pass) {
+      setProgress('hide', 20, 'ENCRYPTING WITH AES-256-GCM...');
+      await new Promise(r => setTimeout(r, 30));
+      payload = await aesEncrypt(msg, pass);
+    }
+
+    // Build bit stream: MAGIC(32) + LENGTH(32) + DATA
+    const enc = new TextEncoder();
+    const payloadBytes = enc.encode(payload);
+    const magicBits  = strToBits(MAGIC);                // 32 bits
+    const lengthBits = int32ToBits(payloadBytes.length); // 32 bits
+    const dataBits   = uint8ToBits(payloadBytes);
+
+    const allBits = [...magicBits, ...lengthBits, ...dataBits];
+
+    // Capacity check
+    const maxBits = (hideImgData.data.length / 4) * 3; // R,G,B only (skip A)
+    if (allBits.length > maxBits) {
+      throw new Error(`Message too large. Need ${allBits.length} bits, image has ${maxBits} bits capacity.`);
+    }
+
+    setProgress('hide', 40, 'ENCODING INTO PIXEL LSBs...');
+    await new Promise(r => setTimeout(r, 30));
+
+    // Clone image data
+    const data = new Uint8ClampedArray(hideImgData.data);
+    let bitIdx = 0;
+
+    for (let i = 0; i < data.length && bitIdx < allBits.length; i++) {
+      if ((i % 4) === 3) continue; // skip alpha channel
+      data[i] = (data[i] & 0xFE) | allBits[bitIdx++];
+    }
+
+    setProgress('hide', 75, 'RENDERING OUTPUT IMAGE...');
+    await new Promise(r => setTimeout(r, 30));
+
+    // Write to canvas and export PNG
+    const cv = document.getElementById('c');
+    const ctx = cv.getContext('2d');
+    const newImageData = new ImageData(data, hideImgData.width, hideImgData.height);
+    ctx.putImageData(newImageData, 0, 0);
+
+    setProgress('hide', 90, 'PREPARING DOWNLOAD...');
+    await new Promise(r => setTimeout(r, 30));
+
+    cv.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'op_stealth_output.png';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      setProgress('hide', 100, 'COMPLETE');
+      outEl.style.display = 'block';
+      outEl.className = 'output ok';
+      document.getElementById('hide-output-text').textContent =
+        `✔ SUCCESS — Message embedded into ${allBits.length} pixel LSBs.\n` +
+        `Payload: ${payloadBytes.length} bytes | ${pass ? 'AES-256 ENCRYPTED' : 'PLAINTEXT (no passphrase)'}\n` +
+        `Image: ${hideImgData.width}×${hideImgData.height} | Capacity used: ${((allBits.length/maxBits)*100).toFixed(2)}%\n\n` +
+        `Download started → op_stealth_output.png`;
+    }, 'image/png');
+
+  } catch(e) {
+    setProgress('hide', 0, '');
+    document.getElementById('hide-progress').style.display = 'none';
+    outEl.style.display = 'block';
+    outEl.className = 'output err';
+    document.getElementById('hide-output-text').textContent = '⚠ ERROR: ' + e.message;
+  }
+}
+
+// ═══ REVEAL MESSAGE ═══
+async function revealMessage() {
+  if (!revealImgData) { toast('LOAD AN IMAGE FIRST'); return; }
+  const pass = document.getElementById('reveal-pass').value;
+
+  document.getElementById('reveal-output').style.display = 'none';
+  document.getElementById('reveal-error').style.display = 'none';
+  setProgress('reveal', 10, 'SCANNING PIXEL LSBS...');
+
+  await new Promise(r => setTimeout(r, 30));
+
+  try {
+    const data = revealImgData.data;
+    const bits = [];
+
+    // Extract all LSBs (skip alpha)
+    for (let i = 0; i < data.length; i++) {
+      if ((i % 4) === 3) continue;
+      bits.push(data[i] & 1);
+    }
+
+    setProgress('reveal', 35, 'READING MAGIC HEADER...');
+    await new Promise(r => setTimeout(r, 30));
+
+    // Verify magic signature (first 32 bits)
+    const magicBytes = bitsToUint8(bits.slice(0, 32));
+    const magic = new TextDecoder().decode(magicBytes);
+    if (magic !== MAGIC) {
+      throw new Error('No OP STEALTH payload found in this image. Magic signature not detected.');
+    }
+
+    setProgress('reveal', 55, 'READING PAYLOAD LENGTH...');
+    await new Promise(r => setTimeout(r, 30));
+
+    // Read length (next 32 bits)
+    const length = bitsToInt32(bits.slice(32, 64));
+    if (length <= 0 || length > 10_000_000) {
+      throw new Error('Invalid payload length detected. Image may be corrupted.');
+    }
+
+    setProgress('reveal', 70, 'EXTRACTING ' + length + ' BYTES...');
+    await new Promise(r => setTimeout(r, 30));
+
+    // Extract payload bytes
+    const payloadBits = bits.slice(64, 64 + length * 8);
+    if (payloadBits.length < length * 8) {
+      throw new Error('Image is too small to contain the full payload.');
+    }
+    const payloadBytes = bitsToUint8(payloadBits);
+    let payload = new TextDecoder().decode(payloadBytes);
+
+    setProgress('reveal', 85, 'DECRYPTING PAYLOAD...');
+    await new Promise(r => setTimeout(r, 30));
+
+    // Decrypt if password given
+    if (pass) {
+      payload = await aesDecrypt(payload, pass);
+    }
+
+    setProgress('reveal', 100, 'MESSAGE EXTRACTED');
+    document.getElementById('reveal-output').style.display = 'block';
+    document.getElementById('reveal-msg-text').textContent = payload;
+
+  } catch(e) {
+    setProgress('reveal', 0, '');
+    document.getElementById('reveal-progress').style.display = 'none';
+    document.getElementById('reveal-error').style.display = 'block';
+    document.getElementById('reveal-error-text').textContent =
+      '⚠ EXTRACTION FAILED: ' + e.message +
+      (e.message.includes('decrypt') || e.message.includes('GCM') ? '\n\nWrong passphrase or corrupted data.' : '');
+  }
+}
+
+// ═══ RESET ═══
+function resetHide() {
+  hideImgData = null;
+  document.getElementById('hide-img-input').value = '';
+  document.getElementById('hide-preview-wrap').style.display = 'none';
+  document.getElementById('hide-msg').value = '';
+  document.getElementById('hide-pass').value = '';
+  document.getElementById('hide-output').style.display = 'none';
+  document.getElementById('hide-progress').style.display = 'none';
+  document.getElementById('msg-chars').textContent = '0';
+  document.getElementById('msg-used').textContent = '0%';
+}
+
+function resetReveal() {
+  revealImgData = null;
+  document.getElementById('reveal-img-input').value = '';
+  document.getElementById('reveal-preview-wrap').style.display = 'none';
+  document.getElementById('reveal-pass').value = '';
+  document.getElementById('reveal-output').style.display = 'none';
+  document.getElementById('reveal-error').style.display = 'none';
+  document.getElementById('reveal-progress').style.display = 'none';
+}
+
+// Drag & drop visual feedback
+['hide-drop','reveal-drop'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('drop', () => el.classList.remove('drag-over'));
+});
+</script>
+</body>
+</html>
